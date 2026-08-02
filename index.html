@@ -109,28 +109,6 @@
       padding: 16px;
     }
 
-    .greeting {
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-
-    .summary {
-      font-size: 15px;
-      color: #666;
-      margin-bottom: 20px;
-    }
-
-    .home-list {
-      list-style: none;
-    }
-
-    .home-list li {
-      padding: 10px 0;
-      border-bottom: 1px solid #eee;
-      font-size: 15px;
-    }
-
     .task-list {
       list-style: none;
     }
@@ -164,6 +142,27 @@
       background: #e5e5e5;
       padding: 3px 10px;
       border-radius: 10px;
+    }
+
+    .task-row .task-badges {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .task-row .task-due-badge {
+      font-size: 13px;
+      color: #fff;
+      padding: 3px 10px;
+      border-radius: 10px;
+    }
+
+    .task-row .task-due-badge.overdue {
+      background: #c0392b;
+    }
+
+    .task-row .task-due-badge.due-today {
+      background: #d98c00;
     }
 
     .detail-field {
@@ -213,6 +212,7 @@
     }
 
     .form-field input[type="text"],
+    .form-field input[type="datetime-local"],
     .form-field textarea,
     .form-field select {
       width: 100%;
@@ -284,8 +284,7 @@
   <div class="phone">
     <div class="screen" id="screen"></div>
     <div class="tab-bar" id="tab-bar">
-      <button data-tab="home">Home</button>
-      <button data-tab="tasks">Tasks</button>
+      <button data-tab="tasks">My Tasks</button>
       <button data-tab="profile">Profile</button>
     </div>
   </div>
@@ -293,17 +292,17 @@
   <script>
     var state = {
       tasks: [
-        { id: 't1', title: 'Order safety signage for site entry', description: 'Need two new signs for the east gate.', priority: 'medium', status: 'todo' },
-        { id: 't2', title: 'Book scissor lift inspection', description: 'Annual inspection is due. Call the hire company.', priority: 'high', status: 'todo' },
+        { id: 't1', title: 'Order safety signage for site entry', description: 'Need two new signs for the east gate.', priority: 'medium', status: 'todo', dueDate: '2026-08-02T09:00' },
+        { id: 't2', title: 'Book scissor lift inspection', description: 'Annual inspection is due. Call the hire company.', priority: 'high', status: 'todo', dueDate: '2026-07-28T10:00' },
         { id: 't3', title: 'Update site induction slides', description: '', priority: 'low', status: 'done' },
-        { id: 't4', title: 'Chase concrete pour schedule', description: 'Confirm slab pour with the subcontractor.', priority: 'high', status: 'todo' },
+        { id: 't4', title: 'Chase concrete pour schedule', description: 'Confirm slab pour with the subcontractor.', priority: 'high', status: 'todo', dueDate: '2026-08-10T14:00' },
         { id: 't5', title: 'File weekly toolbox talk notes', description: 'Scan and file the signed attendance sheet.', priority: 'low', status: 'done' },
         { id: 't6', title: 'Replace broken first aid kit stock', description: 'Bandages and eye wash are running low.', priority: 'medium', status: 'todo' },
-        { id: 't7', title: 'Review scaffold handover checklist', description: '', priority: 'medium', status: 'todo' },
+        { id: 't7', title: 'Review scaffold handover checklist', description: '', priority: 'medium', status: 'todo', dueDate: '2026-08-05T08:00' },
         { id: 't8', title: 'Send timesheets to payroll', description: 'Last week\'s timesheets from the crew.', priority: 'high', status: 'done' }
       ],
-      activeTab: 'home',
-      currentScreen: 'home',
+      activeTab: 'tasks',
+      currentScreen: 'tasks',
       editingTaskId: null,
       nextId: 9
     };
@@ -324,6 +323,30 @@
       return div.innerHTML;
     }
 
+    function compareTasks(a, b) {
+      if (a.status !== b.status) {
+        return a.status === 'done' ? 1 : -1;
+      }
+      if (a.status === 'done') return 0;
+      if (a.dueDate && b.dueDate) {
+        return a.dueDate < b.dueDate ? -1 : (a.dueDate > b.dueDate ? 1 : 0);
+      }
+      if (a.dueDate && !b.dueDate) return -1;
+      if (!a.dueDate && b.dueDate) return 1;
+      return 0;
+    }
+
+    function getDueBadge(task) {
+      if (task.status !== 'todo' || !task.dueDate) return null;
+      var due = new Date(task.dueDate);
+      var now = new Date();
+      var dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+      var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (dueDay < today) return { text: 'Overdue', className: 'overdue' };
+      if (dueDay.getTime() === today.getTime()) return { text: 'Due today', className: 'due-today' };
+      return null;
+    }
+
     function render() {
       tabBarEl.style.display = state.currentScreen === 'form' ? 'none' : 'flex';
 
@@ -332,40 +355,28 @@
         buttons[i].className = buttons[i].dataset.tab === state.activeTab ? 'active' : '';
       }
 
-      if (state.currentScreen === 'home') renderHome();
-      else if (state.currentScreen === 'tasks') renderTasks();
+      if (state.currentScreen === 'tasks') renderTasks();
       else if (state.currentScreen === 'profile') renderProfile();
       else if (state.currentScreen === 'form') renderTaskForm();
     }
 
-    function renderHome() {
-      var outstanding = state.tasks.filter(function (t) { return t.status === 'todo'; });
-      var listItems = outstanding.map(function (t) {
-        return '<li>' + escapeHtml(t.title) + '</li>';
-      }).join('');
-
-      screenEl.innerHTML =
-        '<div class="header"><h1>Home</h1></div>' +
-        '<div class="content">' +
-          '<div class="greeting">Hello!</div>' +
-          '<div class="summary">You have ' + outstanding.length + ' outstanding task' + (outstanding.length === 1 ? '' : 's') + '.</div>' +
-          '<ul class="home-list">' + listItems + '</ul>' +
-        '</div>';
-    }
-
     function renderTasks() {
-      var rows = state.tasks.map(function (t) {
+      var sortedTasks = state.tasks.slice().sort(compareTasks);
+
+      var rows = sortedTasks.map(function (t) {
+        var dueBadge = getDueBadge(t);
+        var dueBadgeHtml = dueBadge ? '<span class="task-due-badge ' + dueBadge.className + '">' + dueBadge.text + '</span>' : '';
         return (
           '<li class="task-row" data-id="' + t.id + '">' +
             '<input type="checkbox" data-id="' + t.id + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
             '<span class="task-title' + (t.status === 'done' ? ' done' : '') + '">' + escapeHtml(t.title) + '</span>' +
-            '<span class="task-priority">' + t.priority + '</span>' +
+            '<span class="task-badges">' + dueBadgeHtml + '<span class="task-priority">' + t.priority + '</span></span>' +
           '</li>'
         );
       }).join('');
 
       screenEl.innerHTML =
-        '<div class="header"><h1>Tasks</h1><button class="add-btn" id="add-task-btn">+</button></div>' +
+        '<div class="header"><h1>My Tasks</h1><button class="add-btn" id="add-task-btn">+</button></div>' +
         '<ul class="task-list">' + rows + '</ul>';
 
       document.getElementById('add-task-btn').addEventListener('click', function () {
@@ -430,6 +441,10 @@
               '<option value="high">high</option>' +
             '</select>' +
           '</div>' +
+          '<div class="form-field">' +
+            '<label for="field-duedate">Due date</label>' +
+            '<input type="datetime-local" id="field-duedate" value="' + (editing && editing.dueDate ? editing.dueDate : '') + '">' +
+          '</div>' +
           '<button class="btn full" id="submit-btn">Save</button>' +
           (editing ?
             '<button class="btn full" id="toggle-btn">' + (editing.status === 'done' ? 'Mark as to-do' : 'Mark as done') + '</button>' +
@@ -471,18 +486,21 @@
         }
         var description = document.getElementById('field-description').value.trim();
         var priority = document.getElementById('field-priority').value;
+        var dueDate = document.getElementById('field-duedate').value;
 
         if (editing) {
           editing.title = title;
           editing.description = description;
           editing.priority = priority;
+          editing.dueDate = dueDate;
         } else {
           state.tasks.push({
             id: 't' + state.nextId,
             title: title,
             description: description,
             priority: priority,
-            status: 'todo'
+            status: 'todo',
+            dueDate: dueDate
           });
           state.nextId++;
         }
