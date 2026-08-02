@@ -144,24 +144,23 @@
       border-radius: 10px;
     }
 
-    .task-row .task-badges {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .task-row .task-due-badge {
+    .group-header {
       font-size: 13px;
-      color: #fff;
-      padding: 3px 10px;
-      border-radius: 10px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 14px 16px 6px;
+      background: #fafafa;
     }
 
-    .task-row .task-due-badge.overdue {
+    .group-header.overdue {
+      color: #fff;
       background: #c0392b;
     }
 
-    .task-row .task-due-badge.due-today {
+    .group-header.due-today {
+      color: #fff;
       background: #d98c00;
     }
 
@@ -336,15 +335,12 @@
       return 0;
     }
 
-    function getDueBadge(task) {
-      if (task.status !== 'todo' || !task.dueDate) return null;
-      var due = new Date(task.dueDate);
-      var now = new Date();
-      var dueDay = new Date(due.getFullYear(), due.getMonth(), due.getDate());
-      var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      if (dueDay < today) return { text: 'Overdue', className: 'overdue' };
-      if (dueDay.getTime() === today.getTime()) return { text: 'Due today', className: 'due-today' };
-      return null;
+    function startOfDay(date) {
+      return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    }
+
+    function formatDayHeader(date) {
+      return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
     }
 
     function render() {
@@ -360,24 +356,84 @@
       else if (state.currentScreen === 'form') renderTaskForm();
     }
 
-    function renderTasks() {
-      var sortedTasks = state.tasks.slice().sort(compareTasks);
+    function renderTaskRow(t) {
+      return (
+        '<li class="task-row" data-id="' + t.id + '">' +
+          '<input type="checkbox" data-id="' + t.id + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
+          '<span class="task-title' + (t.status === 'done' ? ' done' : '') + '">' + escapeHtml(t.title) + '</span>' +
+          '<span class="task-priority">' + t.priority + '</span>' +
+        '</li>'
+      );
+    }
 
-      var rows = sortedTasks.map(function (t) {
-        var dueBadge = getDueBadge(t);
-        var dueBadgeHtml = dueBadge ? '<span class="task-due-badge ' + dueBadge.className + '">' + dueBadge.text + '</span>' : '';
-        return (
-          '<li class="task-row" data-id="' + t.id + '">' +
-            '<input type="checkbox" data-id="' + t.id + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
-            '<span class="task-title' + (t.status === 'done' ? ' done' : '') + '">' + escapeHtml(t.title) + '</span>' +
-            '<span class="task-badges">' + dueBadgeHtml + '<span class="task-priority">' + t.priority + '</span></span>' +
-          '</li>'
-        );
-      }).join('');
+    function renderTaskGroup(title, tasks, headerClass) {
+      if (!tasks.length) return '';
+      var classAttr = 'group-header' + (headerClass ? ' ' + headerClass : '');
+      return (
+        '<div class="' + classAttr + '">' + title + '</div>' +
+        '<ul class="task-list">' + tasks.map(renderTaskRow).join('') + '</ul>'
+      );
+    }
+
+    function renderTasks() {
+      var today = startOfDay(new Date());
+      var tomorrow = new Date(today);
+      tomorrow.setDate(today.getDate() + 1);
+
+      var doneTasks = [];
+      var overdueTasks = [];
+      var dueTodayTasks = [];
+      var tomorrowTasks = [];
+      var noDateTasks = [];
+      var laterGroups = [];
+      var laterGroupsByKey = {};
+
+      state.tasks.forEach(function (t) {
+        if (t.status === 'done') {
+          doneTasks.push(t);
+          return;
+        }
+        if (!t.dueDate) {
+          noDateTasks.push(t);
+          return;
+        }
+        var dueDay = startOfDay(new Date(t.dueDate));
+        if (dueDay < today) {
+          overdueTasks.push(t);
+        } else if (dueDay.getTime() === today.getTime()) {
+          dueTodayTasks.push(t);
+        } else if (dueDay.getTime() === tomorrow.getTime()) {
+          tomorrowTasks.push(t);
+        } else {
+          var key = dueDay.getTime();
+          if (!laterGroupsByKey[key]) {
+            laterGroupsByKey[key] = { date: dueDay, tasks: [] };
+            laterGroups.push(laterGroupsByKey[key]);
+          }
+          laterGroupsByKey[key].tasks.push(t);
+        }
+      });
+
+      overdueTasks.sort(compareTasks);
+      dueTodayTasks.sort(compareTasks);
+      tomorrowTasks.sort(compareTasks);
+      noDateTasks.sort(compareTasks);
+      laterGroups.sort(function (a, b) { return a.date - b.date; });
+      laterGroups.forEach(function (group) { group.tasks.sort(compareTasks); });
+
+      var groupsHtml =
+        renderTaskGroup('Overdue', overdueTasks, 'overdue') +
+        renderTaskGroup('Due today', dueTodayTasks, 'due-today') +
+        renderTaskGroup('Tomorrow', tomorrowTasks) +
+        laterGroups.map(function (group) {
+          return renderTaskGroup(formatDayHeader(group.date), group.tasks);
+        }).join('') +
+        renderTaskGroup('No due date', noDateTasks) +
+        renderTaskGroup('Done', doneTasks);
 
       screenEl.innerHTML =
         '<div class="header"><h1>My Tasks</h1><button class="add-btn" id="add-task-btn">+</button></div>' +
-        '<ul class="task-list">' + rows + '</ul>';
+        groupsHtml;
 
       document.getElementById('add-task-btn').addEventListener('click', function () {
         state.editingTaskId = null;
