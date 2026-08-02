@@ -150,10 +150,23 @@
 
     .task-row .task-priority {
       font-size: 13px;
-      color: #333;
-      background: #e5e5e5;
       padding: 3px 10px;
       border-radius: 10px;
+    }
+
+    .task-row .task-priority.priority-low {
+      color: #2f7a3d;
+      background: #dff0e2;
+    }
+
+    .task-row .task-priority.priority-medium {
+      color: #96650a;
+      background: #fdecc8;
+    }
+
+    .task-row .task-priority.priority-high {
+      color: #a92f27;
+      background: #fbe0de;
     }
 
     .group-header {
@@ -386,7 +399,7 @@
             '<span class="task-title' + (t.status === 'done' ? ' done' : '') + '">' + escapeHtml(t.title) + '</span>' +
             dueLineHtml +
           '</div>' +
-          '<span class="task-priority">' + t.priority + '</span>' +
+          '<span class="task-priority priority-' + t.priority + '">' + t.priority + '</span>' +
         '</li>'
       );
     }
