@@ -127,13 +127,25 @@
       margin-right: 14px;
     }
 
-    .task-row .task-title {
+    .task-row .task-main {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .task-row .task-title {
       font-size: 15px;
     }
 
     .task-row .task-title.done {
       text-decoration: line-through;
+    }
+
+    .task-row .task-due-time {
+      font-size: 13px;
+      color: #888;
     }
 
     .task-row .task-priority {
@@ -339,8 +351,13 @@
       return new Date(date.getFullYear(), date.getMonth(), date.getDate());
     }
 
-    function formatDayHeader(date) {
-      return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    function formatDueTime(dueDate) {
+      return new Date(dueDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    }
+
+    function formatDueDateTime(dueDate) {
+      var d = new Date(dueDate);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + formatDueTime(dueDate);
     }
 
     function render() {
@@ -356,22 +373,31 @@
       else if (state.currentScreen === 'form') renderTaskForm();
     }
 
-    function renderTaskRow(t) {
+    function renderTaskRow(t, showDate) {
+      var dueLineHtml = '';
+      if (t.status !== 'done' && t.dueDate) {
+        var dueText = showDate ? formatDueDateTime(t.dueDate) : formatDueTime(t.dueDate);
+        dueLineHtml = '<span class="task-due-time">' + dueText + '</span>';
+      }
       return (
         '<li class="task-row" data-id="' + t.id + '">' +
           '<input type="checkbox" data-id="' + t.id + '"' + (t.status === 'done' ? ' checked' : '') + '>' +
-          '<span class="task-title' + (t.status === 'done' ? ' done' : '') + '">' + escapeHtml(t.title) + '</span>' +
+          '<div class="task-main">' +
+            '<span class="task-title' + (t.status === 'done' ? ' done' : '') + '">' + escapeHtml(t.title) + '</span>' +
+            dueLineHtml +
+          '</div>' +
           '<span class="task-priority">' + t.priority + '</span>' +
         '</li>'
       );
     }
 
-    function renderTaskGroup(title, tasks, headerClass) {
+    function renderTaskGroup(title, tasks, headerClass, showDate) {
       if (!tasks.length) return '';
       var classAttr = 'group-header' + (headerClass ? ' ' + headerClass : '');
+      var rows = tasks.map(function (t) { return renderTaskRow(t, showDate); }).join('');
       return (
         '<div class="' + classAttr + '">' + title + '</div>' +
-        '<ul class="task-list">' + tasks.map(renderTaskRow).join('') + '</ul>'
+        '<ul class="task-list">' + rows + '</ul>'
       );
     }
 
@@ -379,14 +405,16 @@
       var today = startOfDay(new Date());
       var tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
+      var endOfWeek = new Date(today);
+      endOfWeek.setDate(today.getDate() + ((7 - today.getDay()) % 7));
 
       var doneTasks = [];
       var overdueTasks = [];
       var dueTodayTasks = [];
       var tomorrowTasks = [];
+      var thisWeekTasks = [];
+      var upcomingTasks = [];
       var noDateTasks = [];
-      var laterGroups = [];
-      var laterGroupsByKey = {};
 
       state.tasks.forEach(function (t) {
         if (t.status === 'done') {
@@ -404,32 +432,25 @@
           dueTodayTasks.push(t);
         } else if (dueDay.getTime() === tomorrow.getTime()) {
           tomorrowTasks.push(t);
+        } else if (dueDay <= endOfWeek) {
+          thisWeekTasks.push(t);
         } else {
-          var key = dueDay.getTime();
-          if (!laterGroupsByKey[key]) {
-            laterGroupsByKey[key] = { date: dueDay, tasks: [] };
-            laterGroups.push(laterGroupsByKey[key]);
-          }
-          laterGroupsByKey[key].tasks.push(t);
+          upcomingTasks.push(t);
         }
       });
 
-      overdueTasks.sort(compareTasks);
-      dueTodayTasks.sort(compareTasks);
-      tomorrowTasks.sort(compareTasks);
-      noDateTasks.sort(compareTasks);
-      laterGroups.sort(function (a, b) { return a.date - b.date; });
-      laterGroups.forEach(function (group) { group.tasks.sort(compareTasks); });
+      [overdueTasks, dueTodayTasks, tomorrowTasks, thisWeekTasks, upcomingTasks, noDateTasks].forEach(function (list) {
+        list.sort(compareTasks);
+      });
 
       var groupsHtml =
-        renderTaskGroup('Overdue', overdueTasks, 'overdue') +
-        renderTaskGroup('Due today', dueTodayTasks, 'due-today') +
-        renderTaskGroup('Tomorrow', tomorrowTasks) +
-        laterGroups.map(function (group) {
-          return renderTaskGroup(formatDayHeader(group.date), group.tasks);
-        }).join('') +
-        renderTaskGroup('No due date', noDateTasks) +
-        renderTaskGroup('Done', doneTasks);
+        renderTaskGroup('Overdue', overdueTasks, 'overdue', true) +
+        renderTaskGroup('Due today', dueTodayTasks, 'due-today', false) +
+        renderTaskGroup('Tomorrow', tomorrowTasks, null, false) +
+        renderTaskGroup('This week', thisWeekTasks, null, true) +
+        renderTaskGroup('Upcoming', upcomingTasks, null, true) +
+        renderTaskGroup('No due date', noDateTasks, null, false) +
+        renderTaskGroup('Done', doneTasks, null, false);
 
       screenEl.innerHTML =
         '<div class="header"><h1>My Tasks</h1><button class="add-btn" id="add-task-btn">+</button></div>' +
