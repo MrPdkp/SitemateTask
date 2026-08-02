@@ -43,8 +43,10 @@
 
     .tab-bar {
       display: flex;
+      align-items: center;
       border-top: 1px solid #ccc;
       background: #f2f2f2;
+      position: relative;
     }
 
     .tab-bar button {
@@ -60,6 +62,29 @@
     .tab-bar button.active {
       color: #222;
       font-weight: 600;
+    }
+
+    .tab-bar .add-task-btn {
+      flex: 0 0 auto;
+      width: 60px;
+      height: 60px;
+      margin: -24px 10px 0;
+      border-radius: 50%;
+      border: 4px solid #fff;
+      background: #333;
+      color: #fff;
+      font-size: 30px;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      padding: 0;
+    }
+
+    .tab-bar .add-task-btn.active {
+      color: #fff;
+      font-weight: 400;
     }
 
     .header {
@@ -92,17 +117,6 @@
     .header .back-btn .chevron {
       color: #999;
       font-size: 18px;
-    }
-
-    .header .add-btn {
-      border: 1px solid #bbb;
-      background: #f5f5f5;
-      border-radius: 6px;
-      width: 36px;
-      height: 36px;
-      font-size: 20px;
-      color: #444;
-      cursor: pointer;
     }
 
     .content {
@@ -309,6 +323,7 @@
     <div class="screen" id="screen"></div>
     <div class="tab-bar" id="tab-bar">
       <button data-tab="tasks">My Tasks</button>
+      <button class="add-task-btn" id="add-task-btn">+</button>
       <button data-tab="profile">Profile</button>
     </div>
   </div>
@@ -376,7 +391,7 @@
     function render() {
       tabBarEl.style.display = state.currentScreen === 'form' ? 'none' : 'flex';
 
-      var buttons = tabBarEl.querySelectorAll('button');
+      var buttons = tabBarEl.querySelectorAll('button[data-tab]');
       for (var i = 0; i < buttons.length; i++) {
         buttons[i].className = buttons[i].dataset.tab === state.activeTab ? 'active' : '';
       }
@@ -466,14 +481,8 @@
         renderTaskGroup('Done', doneTasks, null, false);
 
       screenEl.innerHTML =
-        '<div class="header"><h1>My Tasks</h1><button class="add-btn" id="add-task-btn">+</button></div>' +
+        '<div class="header"><h1>My Tasks</h1></div>' +
         groupsHtml;
-
-      document.getElementById('add-task-btn').addEventListener('click', function () {
-        state.editingTaskId = null;
-        state.currentScreen = 'form';
-        render();
-      });
 
       var rowEls = screenEl.querySelectorAll('.task-row');
       for (var i = 0; i < rowEls.length; i++) {
@@ -606,6 +615,12 @@
       if (!tab) return;
       state.activeTab = tab;
       state.currentScreen = tab;
+      render();
+    });
+
+    document.getElementById('add-task-btn').addEventListener('click', function () {
+      state.editingTaskId = null;
+      state.currentScreen = 'form';
       render();
     });
 
